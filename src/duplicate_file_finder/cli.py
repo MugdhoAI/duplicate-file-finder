@@ -140,8 +140,8 @@ def main() -> int:
         parser.error("--workers must be >= 1")
     if args.output is not None and not args.json:
         parser.error("--output requires --json")
-    if args.yes and not args.delete:
-        parser.error("--yes requires --delete")
+    if args.yes and not args.delete and args.backup_dir is None:
+        parser.error("--yes requires --delete or --backup-dir")
     if args.backup_dir is not None and args.delete:
         parser.error("--backup-dir cannot be combined with --delete")
 
