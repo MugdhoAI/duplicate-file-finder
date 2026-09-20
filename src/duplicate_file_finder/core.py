@@ -19,16 +19,21 @@ def iter_files(
     min_size: int = 0,
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
+    follow_symlinks: bool = False,
 ) -> Iterable[Path]:
     """Yield regular files below root, skipping inaccessible entries."""
     excluded = {path.resolve() for path in exclude}
     try:
         for path in root.rglob("*"):
             try:
+                if not follow_symlinks and path.is_symlink():
+                    continue
                 resolved = path.resolve()
                 if any(resolved == item or item in resolved.parents for item in excluded):
                     continue
-                if not include_hidden and any(part.startswith(".") for part in path.relative_to(root).parts):
+                if not include_hidden and any(
+                    part.startswith(".") for part in path.relative_to(root).parts
+                ):
                     continue
                 if path.is_file() and path.stat().st_size >= min_size:
                     yield path
@@ -79,6 +84,7 @@ def find_duplicates(
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
     workers: int | None = None,
+    follow_symlinks: bool = False,
 ) -> tuple[list[list[Path]], int, int]:
     """Find exact duplicate files using staged hashing and safe file selection."""
     roots = _normalize_roots(root)
@@ -92,6 +98,7 @@ def find_duplicates(
             min_size=min_size,
             include_hidden=include_hidden,
             exclude=exclude,
+            follow_symlinks=follow_symlinks,
         ):
             try:
                 size = path.stat().st_size
@@ -154,6 +161,7 @@ def reclaimable_bytes(groups: list[list[Path]]) -> int:
             except OSError:
                 continue
     return total
+
 
 def duplicate_removal_plan(groups: list[list[Path]]) -> list[Path]:
     """Return redundant paths, keeping one file per duplicate group."""

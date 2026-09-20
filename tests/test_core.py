@@ -1,7 +1,12 @@
+import json
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
+from duplicate_file_finder.cli import main
 from duplicate_file_finder.core import (
     file_hash,
     find_duplicates,
@@ -69,6 +74,21 @@ class DuplicateFinderTests(unittest.TestCase):
             self.assertEqual(groups, [[first, second]])
             self.assertEqual(skipped, 0)
 
+    def test_symlinks_are_skipped_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.txt"
+            link = root / "link.txt"
+            first.write_text("same", encoding="utf-8")
+            try:
+                link.symlink_to(first)
+            except (OSError, NotImplementedError):
+                self.skipTest("symbolic links are not available")
+            groups, scanned, skipped = find_duplicates(root)
+            self.assertEqual(groups, [])
+            self.assertEqual(scanned, 1)
+            self.assertEqual(skipped, 0)
+
     def test_reclaimable_bytes_keeps_one_file_per_group(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -79,6 +99,37 @@ class DuplicateFinderTests(unittest.TestCase):
             second.write_bytes(b"1234")
             third.write_bytes(b"1234")
             self.assertEqual(reclaimable_bytes([[first, second, third]]), 8)
+
+    def test_fail_if_duplicates_returns_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "first.txt").write_text("same", encoding="utf-8")
+            (root / "second.txt").write_text("same", encoding="utf-8")
+            original = sys.argv
+            try:
+                sys.argv = ["dupes", str(root), "--fail-if-duplicates"]
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(main(), 1)
+            finally:
+                sys.argv = original
+
+    def test_json_report_can_be_written_to_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "reports" / "scan.json"
+            (root / "first.txt").write_text("same", encoding="utf-8")
+            (root / "second.txt").write_text("same", encoding="utf-8")
+            original = sys.argv
+            try:
+                sys.argv = ["dupes", str(root), "--json", "--output", str(output)]
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(main(), 0)
+            finally:
+                sys.argv = original
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["report_version"], 1)
+            self.assertEqual(report["duplicate_group_count"], 1)
+            self.assertTrue(report["duplicate_groups"][0]["verified_same_hash"])
 
 
 if __name__ == "__main__":
