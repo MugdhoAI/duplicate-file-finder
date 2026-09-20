@@ -3,17 +3,44 @@
 from __future__ import annotations
 
 import argparse
+import json
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from .core import find_duplicates, reclaimable_bytes
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="duplicate-file-finder",
+        prog="dupes",
         description="Find duplicate files by comparing their content.",
     )
     parser.add_argument("directory", type=Path, help="directory to scan recursively")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print results as machine-readable JSON",
+    )
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="print only the scan summary",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {package_version()}",
+    )
     return parser
+
+
+def package_version() -> str:
+    """Return the installed package version."""
+    try:
+        return version("duplicate-file-finder")
+    except PackageNotFoundError:
+        return "0.1.0"
+
 
 def format_size(size: int) -> str:
     """Format a byte count for human-readable output."""
@@ -24,6 +51,52 @@ def format_size(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{size} B"
+
+
+def build_report(root: Path, groups: list[list[Path]], scanned: int, skipped: int) -> dict:
+    """Build the stable machine-readable scan report."""
+    return {
+        "directory": str(root),
+        "scanned": scanned,
+        "skipped": skipped,
+        "duplicate_group_count": len(groups),
+        "reclaimable_bytes": reclaimable_bytes(groups),
+        "duplicate_groups": [
+            {
+                "size": group[0].stat().st_size,
+                "files": [str(path) for path in group],
+                "reclaimable_bytes": group[0].stat().st_size * (len(group) - 1),
+            }
+            for group in groups
+        ],
+    }
+
+
+def print_human_report(
+    groups: list[list[Path]], scanned: int, skipped: int, summary_only: bool
+) -> None:
+    """Print the human-readable report."""
+    if not summary_only:
+        if groups:
+            print("Duplicate files\n")
+            for index, group in enumerate(groups, start=1):
+                size = group[0].stat().st_size
+                reclaimable = size * (len(group) - 1)
+                print(
+                    f"Group {index} ({len(group)} files, "
+                    f"{format_size(reclaimable)} reclaimable)"
+                )
+                for path in group:
+                    print(f"  {path}")
+                print()
+        else:
+            print("No duplicate files found.\n")
+
+    print(f"Scanned {scanned} files and found {len(groups)} duplicate groups.")
+    print(f"Potentially reclaimable space: {format_size(reclaimable_bytes(groups))}")
+    if skipped:
+        print(f"Skipped {skipped} files that could not be accessed.")
+
 
 def main() -> int:
     parser = build_parser()
@@ -37,20 +110,9 @@ def main() -> int:
 
     groups, scanned, skipped = find_duplicates(root)
 
-    if groups:
-        print("Duplicate files\n")
-        for index, group in enumerate(groups, start=1):
-            size = group[0].stat().st_size
-            reclaimable = size * (len(group) - 1)
-            print(f"Group {index} ({len(group)} files, {format_size(reclaimable)} reclaimable)")
-            for path in group:
-                print(f"  {path}")
-            print()
+    if args.json:
+        print(json.dumps(build_report(root, groups, scanned, skipped), indent=2))
     else:
-        print("No duplicate files found.\n")
+        print_human_report(groups, scanned, skipped, args.summary_only)
 
-    print(f"Scanned {scanned} files and found {len(groups)} duplicate groups.")
-    print(f"Potentially reclaimable space: {format_size(reclaimable_bytes(groups))}")
-    if skipped:
-        print(f"Skipped {skipped} files that could not be accessed.")
     return 0
