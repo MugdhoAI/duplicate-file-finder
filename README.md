@@ -19,15 +19,33 @@ Duplicate File Finder scans a directory recursively, groups files by size before
 
 - Python 3.10 or newer
 
+## Installation
+
+Clone the repository and install it locally:
+
+```bash
+python -m pip install -e .
+```
+
 ## Usage
+
+Scan a directory recursively:
+
+```bash
+duplicate-file-finder /path/to/directory
+```
+
+You can also run it as a Python module:
 
 ```bash
 python -m duplicate_file_finder /path/to/directory
 ```
 
-The first file in each duplicate group is treated as the file to keep when calculating reclaimable space. The tool does not remove anything.
+The first file in each duplicate group is treated as the file to keep when calculating reclaimable space. The tool does not remove or modify any files.
 
 ## Development
+
+Run the test suite with:
 
 ```bash
 python -m unittest discover -s tests
