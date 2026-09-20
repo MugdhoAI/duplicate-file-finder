@@ -33,9 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workers", type=int, metavar="N", help="number of hashing workers; default is automatic")
     parser.add_argument("--version", action="version", version=f"%(prog)s {package_version()}")
     parser.add_argument("--keep", choices=("path", "oldest", "newest"), default="path", help="which duplicate to preserve")
-    parser.add_argument("--backup-dir", type=Path, metavar="DIR", help="move redundant files to DIR instead of deleting them")
+    parser.add_argument("--backup-dir", type=Path, metavar="DIR", help="preview moving redundant files to DIR; requires --yes to apply")
     parser.add_argument("--delete", action="store_true", help="preview redundant files; requires --yes to actually delete")
-    parser.add_argument("--yes", action="store_true", help="confirm deletion when used with --delete")
+    parser.add_argument("--yes", action="store_true", help="confirm deletion or backup moves")
     return parser
 
 
@@ -144,8 +144,8 @@ def main() -> int:
         parser.error("--yes requires --delete")
     if args.backup_dir is not None and args.delete:
         parser.error("--backup-dir cannot be combined with --delete")
-    if args.backup_dir is not None and args.yes:
-        parser.error("--yes cannot be combined with --backup-dir")
+    if args.backup_dir is not None and not args.yes:
+        parser.error("--backup-dir requires --yes")
 
     groups, scanned, skipped = find_duplicates(
         args.directories,
