@@ -9,7 +9,7 @@ Duplicate File Finder recursively scans directories, narrows candidates by file 
 - Recursive scanning across one or more directories
 - Staged duplicate detection: size → partial SHA-256 → full SHA-256
 - Hard-link aware duplicate reporting
-- Minimum-size filtering
+- Minimum- and maximum-size filtering
 - Optional hidden-file exclusion
 - Repeatable path exclusions
 - Configurable parallel hashing workers
@@ -20,6 +20,7 @@ Duplicate File Finder recursively scans directories, narrows candidates by file 
 - Automation-friendly duplicate exit status
 - Read-only scanning by default
 - Safe cleanup preview with explicit `--delete --yes` confirmation
+- Backup cleanup mode with configurable keep strategy
 - Standard-library-only implementation
 
 ## Installation
@@ -34,6 +35,7 @@ python -m pip install -e .
 dupes /path/to/directory
 dupes /path/one /path/two
 dupes /path/to/directory --min-size 1048576
+dupes /path/to/directory --max-size 1073741824
 dupes /path/to/directory --no-hidden
 dupes /path/to/directory --exclude /path/to/directory/cache
 
@@ -44,6 +46,7 @@ dupes /path/to/directory --fail-if-duplicates
 
 dupes /path/to/directory --delete
 dupes /path/to/directory --delete --yes
+dupes /path/to/directory --backup-dir ./duplicate-backup --keep oldest
 dupes /path/to/directory --summary-only
 dupes --version
 ```
@@ -51,6 +54,8 @@ dupes --version
 The original `duplicate-file-finder` command remains available.
 
 Scanning is read-only by default. Symlinked files are skipped unless `--follow-symlinks` is explicitly enabled. `--delete` shows the exact cleanup plan first; actual deletion requires explicit `--yes` confirmation. Before deleting each file, the tool re-checks its size and full hash against the file being preserved. Hard links to the same underlying inode are not counted as separate duplicate files, because they do not represent additional file data.
+
+Cleanup supports `path`, `oldest`, and `newest` keep strategies. `--backup-dir` moves redundant files into a backup directory after the same size/hash verification used by deletion, giving destructive cleanup a reversible alternative.
 
 JSON reports include a schema version, scan statistics, duplicate-group hashes, and per-file SHA-256 values. `--output` writes the report atomically so an interrupted write does not leave a partial report. `--fail-if-duplicates` returns exit status 1 when duplicates are found, which makes the scanner usable in scripts and CI.
 
