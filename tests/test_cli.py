@@ -75,6 +75,36 @@ class CliTests(unittest.TestCase):
         args = build_parser().parse_args([".", "--workers", "2"])
         self.assertEqual(args.workers, 2)
 
+
+    def test_delete_is_dry_run_without_yes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--delete"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            self.assertTrue(second.exists())
+            self.assertIn("Dry run only", output.getvalue())
+
+    def test_delete_with_yes_removes_only_redundant_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            with patch("sys.argv", ["dupes", str(root), "--delete", "--yes"]):
+                self.assertEqual(main(), 0)
+            self.assertTrue(first.exists())
+            self.assertFalse(second.exists())
+
+    def test_yes_without_delete_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("sys.argv", ["dupes", directory, "--yes"]):
+                with self.assertRaises(SystemExit):
+                    main()
+
     def test_version_flag_uses_package_version(self) -> None:
         with self.assertRaises(SystemExit) as error:
             build_parser().parse_args(["--version"])
