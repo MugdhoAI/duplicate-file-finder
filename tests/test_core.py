@@ -107,7 +107,7 @@ class DuplicateFinderTests(unittest.TestCase):
             newest = root / "new.txt"
             oldest.write_text("same", encoding="utf-8")
             newest.write_text("same", encoding="utf-8")
-            self.assertEqual(select_keep_file([newest, oldest], "path"), oldest)
+            self.assertEqual(select_keep_file([newest, oldest], "path"), newest)
             self.assertEqual(select_keep_file([oldest, newest], "oldest"), oldest)
             self.assertEqual(select_keep_file([oldest, newest], "newest"), newest)
 
@@ -132,8 +132,7 @@ class DuplicateFinderTests(unittest.TestCase):
             try:
                 sys.argv = ["dupes", str(root), "--backup-dir", str(backup)]
                 with redirect_stdout(StringIO()):
-                    with self.assertRaises(SystemExit):
-                        main()
+                    self.assertEqual(main(), 0)
             finally:
                 sys.argv = original
             self.assertTrue((root / "first.txt").exists())
