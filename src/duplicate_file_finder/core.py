@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from pathlib import Path
@@ -17,6 +18,7 @@ def iter_files(
     root: Path,
     *,
     min_size: int = 0,
+    max_size: int | None = None,
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
     follow_symlinks: bool = False,
@@ -35,7 +37,7 @@ def iter_files(
                     part.startswith(".") for part in path.relative_to(root).parts
                 ):
                     continue
-                if path.is_file() and path.stat().st_size >= min_size:
+                if path.is_file() and min_size <= path.stat().st_size and (max_size is None or path.stat().st_size <= max_size):
                     yield path
             except OSError:
                 continue
@@ -81,6 +83,7 @@ def find_duplicates(
     root: Path | Iterable[Path],
     *,
     min_size: int = 0,
+    max_size: int | None = None,
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
     workers: int | None = None,
@@ -96,6 +99,7 @@ def find_duplicates(
         for path in iter_files(
             current_root,
             min_size=min_size,
+            max_size=max_size,
             include_hidden=include_hidden,
             exclude=exclude,
             follow_symlinks=follow_symlinks,
@@ -163,26 +167,43 @@ def reclaimable_bytes(groups: list[list[Path]]) -> int:
     return total
 
 
-def duplicate_removal_plan(groups: list[list[Path]]) -> list[Path]:
-    """Return redundant paths, keeping one file per duplicate group."""
-    return [path for group in groups for path in group[1:]]
+def select_keep_file(group: list[Path], strategy: str = "path") -> Path:
+    """Select the file to preserve from a duplicate group."""
+    if strategy == "oldest":
+        return min(group, key=lambda path: path.stat().st_mtime_ns)
+    if strategy == "newest":
+        return max(group, key=lambda path: path.stat().st_mtime_ns)
+    if strategy == "path":
+        return min(group, key=lambda path: str(path))
+    raise ValueError(f"unknown keep strategy: {strategy}")
 
 
-def remove_duplicates(groups: list[list[Path]]) -> tuple[list[Path], list[Path]]:
+def duplicate_removal_plan(groups: list[list[Path]], keep: str = "path") -> list[Path]:
+    """Return redundant paths using an explicit keep strategy."""
+    return [
+        path for group in groups
+        for path in group
+        if path != select_keep_file(group, keep)
+    ]
+
+
+def remove_duplicates(groups: list[list[Path]], keep: str = "path") -> tuple[list[Path], list[Path]]:
     """Remove redundant files after rechecking size and full hash."""
     removed: list[Path] = []
     failed: list[Path] = []
     for group in groups:
         if len(group) < 2:
             continue
-        keep = group[0]
+        keep_path = select_keep_file(group, keep)
         try:
-            keep_stat = keep.stat()
-            keep_hash = file_hash(keep)
+            keep_stat = keep_path.stat()
+            keep_hash = file_hash(keep_path)
         except OSError:
-            failed.extend(group[1:])
+            failed.extend(path for path in group if path != keep_path)
             continue
-        for path in group[1:]:
+        for path in group:
+            if path == keep_path:
+                continue
             try:
                 stat = path.stat()
                 if stat.st_size != keep_stat.st_size or file_hash(path) != keep_hash:
@@ -193,3 +214,38 @@ def remove_duplicates(groups: list[list[Path]]) -> tuple[list[Path], list[Path]]
             except OSError:
                 failed.append(path)
     return removed, failed
+
+
+def backup_duplicates(
+    groups: list[list[Path]], backup_dir: Path, keep: str = "path"
+) -> tuple[list[Path], list[Path]]:
+    """Move redundant files to a backup directory after verification."""
+    moved: list[Path] = []
+    failed: list[Path] = []
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    for group in groups:
+        keep_path = select_keep_file(group, keep)
+        try:
+            keep_stat = keep_path.stat()
+            keep_hash = file_hash(keep_path)
+        except OSError:
+            failed.extend(path for path in group if path != keep_path)
+            continue
+        for path in group:
+            if path == keep_path:
+                continue
+            try:
+                stat = path.stat()
+                if stat.st_size != keep_stat.st_size or file_hash(path) != keep_hash:
+                    failed.append(path)
+                    continue
+                destination = backup_dir / path.name
+                counter = 1
+                while destination.exists():
+                    destination = backup_dir / f"{path.stem}.{counter}{path.suffix}"
+                    counter += 1
+                shutil.move(str(path), destination)
+                moved.append(path)
+            except OSError:
+                failed.append(path)
+    return moved, failed
