@@ -154,3 +154,34 @@ def reclaimable_bytes(groups: list[list[Path]]) -> int:
             except OSError:
                 continue
     return total
+
+def duplicate_removal_plan(groups: list[list[Path]]) -> list[Path]:
+    """Return redundant paths, keeping one file per duplicate group."""
+    return [path for group in groups for path in group[1:]]
+
+
+def remove_duplicates(groups: list[list[Path]]) -> tuple[list[Path], list[Path]]:
+    """Remove redundant files after rechecking size and full hash."""
+    removed: list[Path] = []
+    failed: list[Path] = []
+    for group in groups:
+        if len(group) < 2:
+            continue
+        keep = group[0]
+        try:
+            keep_stat = keep.stat()
+            keep_hash = file_hash(keep)
+        except OSError:
+            failed.extend(group[1:])
+            continue
+        for path in group[1:]:
+            try:
+                stat = path.stat()
+                if stat.st_size != keep_stat.st_size or file_hash(path) != keep_hash:
+                    failed.append(path)
+                    continue
+                path.unlink()
+                removed.append(path)
+            except OSError:
+                failed.append(path)
+    return removed, failed
