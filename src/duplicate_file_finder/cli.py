@@ -26,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--summary-only", action="store_true", help="print only the scan summary")
     parser.add_argument("--fail-if-duplicates", action="store_true", help="exit with status 1 when duplicates are found")
     parser.add_argument("--min-size", type=int, default=0, metavar="BYTES", help="ignore files smaller than BYTES")
+    parser.add_argument("--max-size", type=int, metavar="BYTES", help="ignore files larger than BYTES")
     parser.add_argument("--exclude", action="append", type=Path, default=[], metavar="PATH", help="exclude PATH and its descendants; repeatable")
     parser.add_argument("--no-hidden", action="store_true", help="skip hidden files and directories")
     parser.add_argument("--follow-symlinks", action="store_true", help="include symlinked files in scans; disabled by default")
@@ -129,6 +130,10 @@ def main() -> int:
             parser.error(f"not a directory: {root}")
     if args.min_size < 0:
         parser.error("--min-size must be >= 0")
+    if args.max_size is not None and args.max_size < 0:
+        parser.error("--max-size must be >= 0")
+    if args.max_size is not None and args.max_size < args.min_size:
+        parser.error("--max-size must be >= --min-size")
     if args.workers is not None and args.workers < 1:
         parser.error("--workers must be >= 1")
     if args.output is not None and not args.json:
@@ -139,6 +144,7 @@ def main() -> int:
     groups, scanned, skipped = find_duplicates(
         args.directories,
         min_size=args.min_size,
+        max_size=args.max_size,
         include_hidden=not args.no_hidden,
         exclude=args.exclude,
         workers=args.workers,
