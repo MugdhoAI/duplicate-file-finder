@@ -2,14 +2,14 @@
 
 A small, dependency-free Python CLI for finding duplicate files by content.
 
-Duplicate File Finder scans a directory recursively, groups files by size before hashing their contents, and reports duplicate groups together with the storage space that could be reclaimed.
+Duplicate File Finder recursively scans a directory, narrows candidates by file size and partial SHA-256 hashing, confirms matches with full SHA-256, and reports the storage space that could be reclaimed.
 
 ## Features
 
 - Recursive directory scanning
-- Size-based filtering before content hashing
-- SHA-256 content comparison
-- Duplicate groups with file paths
+- Staged duplicate detection: size → partial SHA-256 → full SHA-256
+- Human-readable and JSON output
+- Summary-only mode for scripts and quick checks
 - Reclaimable-space calculation
 - Graceful handling of inaccessible files
 - No files are deleted or modified
@@ -29,16 +29,34 @@ python -m pip install -e .
 
 ## Usage
 
-Scan a directory recursively:
+The recommended command is:
+
+```bash
+dupes /path/to/directory
+```
+
+The original command name remains available:
 
 ```bash
 duplicate-file-finder /path/to/directory
 ```
 
-You can also run it as a Python module:
+Show only the summary:
 
 ```bash
-python -m duplicate_file_finder /path/to/directory
+dupes /path/to/directory --summary-only
+```
+
+Export a machine-readable report:
+
+```bash
+dupes /path/to/directory --json
+```
+
+Show the installed version:
+
+```bash
+dupes --version
 ```
 
 The first file in each duplicate group is treated as the file to keep when calculating reclaimable space. The tool does not remove or modify any files.
@@ -51,4 +69,4 @@ Run the test suite with:
 python -m unittest discover -s tests
 ```
 
-The project intentionally starts with the Python standard library so the core file-scanning and hashing behavior remains easy to inspect, test, and extend.
+The project intentionally uses the Python standard library so the scanning, hashing, and reporting behavior remains easy to inspect, test, and extend.
