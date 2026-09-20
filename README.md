@@ -15,7 +15,8 @@ Duplicate File Finder recursively scans directories, narrows candidates by file 
 - Configurable parallel hashing workers
 - Human-readable and JSON output
 - Summary-only mode
-- No files are deleted or modified
+- Read-only scanning by default
+- Safe cleanup preview with explicit `--delete --yes` confirmation
 - Standard-library-only implementation
 
 ## Installation
@@ -35,13 +36,16 @@ dupes /path/to/directory --exclude /path/to/directory/cache
 
 dupes /path/to/directory --workers 4
 dupes /path/to/directory --json
+
+dupes /path/to/directory --delete
+dupes /path/to/directory --delete --yes
 dupes /path/to/directory --summary-only
 dupes --version
 ```
 
 The original `duplicate-file-finder` command remains available.
 
-The tool is read-only: it never deletes or modifies files. Hard links to the same underlying inode are not counted as separate duplicate files, because they do not represent additional file data.
+Scanning is read-only by default. `--delete` shows the exact cleanup plan first; actual deletion requires explicit `--yes` confirmation. Before deleting each file, the tool re-checks its size and full hash against the file being preserved. Hard links to the same underlying inode are not counted as separate duplicate files, because they do not represent additional file data.
 
 ## Development
 
