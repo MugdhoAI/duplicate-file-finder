@@ -71,6 +71,10 @@ class CliTests(unittest.TestCase):
             groups, _, _ = find_duplicates(root)
             self.assertEqual(groups, [])
 
+    def test_workers_flag_is_accepted(self) -> None:
+        args = build_parser().parse_args([".", "--workers", "2"])
+        self.assertEqual(args.workers, 2)
+
     def test_version_flag_uses_package_version(self) -> None:
         with self.assertRaises(SystemExit) as error:
             build_parser().parse_args(["--version"])
