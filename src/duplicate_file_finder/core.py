@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterable
@@ -11,12 +13,24 @@ CHUNK_SIZE = 1024 * 1024
 PARTIAL_HASH_SIZE = 64 * 1024
 
 
-def iter_files(root: Path) -> Iterable[Path]:
+def iter_files(
+    root: Path,
+    *,
+    min_size: int = 0,
+    include_hidden: bool = True,
+    exclude: Iterable[Path] = (),
+) -> Iterable[Path]:
     """Yield regular files below root, skipping inaccessible entries."""
+    excluded = {path.resolve() for path in exclude}
     try:
         for path in root.rglob("*"):
             try:
-                if path.is_file():
+                resolved = path.resolve()
+                if any(resolved == item or item in resolved.parents for item in excluded):
+                    continue
+                if not include_hidden and any(part.startswith(".") for part in path.relative_to(root).parts):
+                    continue
+                if path.is_file() and path.stat().st_size >= min_size:
                     yield path
             except OSError:
                 continue
@@ -27,7 +41,6 @@ def iter_files(root: Path) -> Iterable[Path]:
 def _hash_stream(file, *, limit: int | None = None, chunk_size: int = CHUNK_SIZE) -> str:
     digest = hashlib.sha256()
     remaining = limit
-
     while True:
         read_size = chunk_size if remaining is None else min(chunk_size, remaining)
         if read_size == 0:
@@ -38,7 +51,6 @@ def _hash_stream(file, *, limit: int | None = None, chunk_size: int = CHUNK_SIZE
         digest.update(chunk)
         if remaining is not None:
             remaining -= len(chunk)
-
     return digest.hexdigest()
 
 
@@ -54,51 +66,80 @@ def partial_file_hash(path: Path, chunk_size: int = PARTIAL_HASH_SIZE) -> str:
         return _hash_stream(file, limit=chunk_size, chunk_size=chunk_size)
 
 
-def find_duplicates(root: Path) -> tuple[list[list[Path]], int, int]:
-    """Find exact duplicate files under root using staged hashing.
+def _normalize_roots(root: Path | Iterable[Path]) -> list[Path]:
+    if isinstance(root, Path):
+        return [root]
+    return list(root)
 
-    Candidates are narrowed by file size, then by a partial content hash,
-    before the complete file is hashed. Small files are fully covered by the
-    partial pass, so they are not read twice.
-    """
+
+def find_duplicates(
+    root: Path | Iterable[Path],
+    *,
+    min_size: int = 0,
+    include_hidden: bool = True,
+    exclude: Iterable[Path] = (),
+    workers: int | None = None,
+) -> tuple[list[list[Path]], int, int]:
+    """Find exact duplicate files using staged hashing and safe file selection."""
+    roots = _normalize_roots(root)
     by_size: dict[int, list[Path]] = defaultdict(list)
     scanned = 0
     skipped = 0
 
-    for path in iter_files(root):
-        try:
-            size = path.stat().st_size
-        except OSError:
-            skipped += 1
-            continue
-        by_size[size].append(path)
-        scanned += 1
+    for current_root in roots:
+        for path in iter_files(
+            current_root,
+            min_size=min_size,
+            include_hidden=include_hidden,
+            exclude=exclude,
+        ):
+            try:
+                size = path.stat().st_size
+            except OSError:
+                skipped += 1
+                continue
+            by_size[size].append(path)
+            scanned += 1
+
+    def hash_candidates(paths: list[Path], hasher) -> list[tuple[Path, str]]:
+        max_workers = workers if workers is not None else min(32, (os.cpu_count() or 1) + 4)
+        if max_workers <= 1 or len(paths) == 1:
+            return [(path, hasher(path)) for path in paths]
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(zip(paths, executor.map(hasher, paths)))
 
     by_partial_hash: dict[tuple[int, str], list[Path]] = defaultdict(list)
     for size, paths in by_size.items():
         if len(paths) < 2:
             continue
-        for path in paths:
-            try:
-                by_partial_hash[(size, partial_file_hash(path))].append(path)
-            except OSError:
-                skipped += 1
+        try:
+            for path, digest in hash_candidates(paths, partial_file_hash):
+                by_partial_hash[(size, digest)].append(path)
+        except OSError:
+            skipped += 1
 
     by_hash: dict[str, list[Path]] = defaultdict(list)
     for paths in by_partial_hash.values():
         if len(paths) < 2:
             continue
+        try:
+            for path, digest in hash_candidates(paths, file_hash):
+                by_hash[digest].append(path)
+        except OSError:
+            skipped += 1
+
+    duplicates: list[list[Path]] = []
+    for paths in by_hash.values():
+        unique_files: dict[tuple[int, int], Path] = {}
         for path in paths:
             try:
-                by_hash[file_hash(path)].append(path)
+                stat = path.stat()
             except OSError:
-                skipped += 1
+                continue
+            unique_files.setdefault((stat.st_dev, stat.st_ino), path)
+        if len(unique_files) > 1:
+            duplicates.append(sorted(unique_files.values(), key=lambda item: str(item)))
 
-    duplicates = [
-        sorted(paths, key=lambda item: str(item))
-        for paths in by_hash.values()
-        if len(paths) > 1
-    ]
     duplicates.sort(key=lambda group: str(group[0]))
     return duplicates, scanned, skipped
 
