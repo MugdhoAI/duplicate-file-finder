@@ -9,7 +9,7 @@ import tempfile
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from .core import duplicate_removal_plan, file_hash, find_duplicates, reclaimable_bytes, remove_duplicates
+from .core import backup_duplicates, duplicate_removal_plan, file_hash, find_duplicates, reclaimable_bytes, remove_duplicates
 
 
 REPORT_VERSION = 1
@@ -32,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--follow-symlinks", action="store_true", help="include symlinked files in scans; disabled by default")
     parser.add_argument("--workers", type=int, metavar="N", help="number of hashing workers; default is automatic")
     parser.add_argument("--version", action="version", version=f"%(prog)s {package_version()}")
+    parser.add_argument("--keep", choices=("path", "oldest", "newest"), default="path", help="which duplicate to preserve")
+    parser.add_argument("--backup-dir", type=Path, metavar="DIR", help="move redundant files to DIR instead of deleting them")
     parser.add_argument("--delete", action="store_true", help="preview redundant files; requires --yes to actually delete")
     parser.add_argument("--yes", action="store_true", help="confirm deletion when used with --delete")
     return parser
@@ -140,6 +142,10 @@ def main() -> int:
         parser.error("--output requires --json")
     if args.yes and not args.delete:
         parser.error("--yes requires --delete")
+    if args.backup_dir is not None and args.delete:
+        parser.error("--backup-dir cannot be combined with --delete")
+    if args.backup_dir is not None and args.yes:
+        parser.error("--yes cannot be combined with --backup-dir")
 
     groups, scanned, skipped = find_duplicates(
         args.directories,
@@ -153,8 +159,30 @@ def main() -> int:
 
     report = build_report(args.directories, groups, scanned, skipped) if (args.json or args.output) else None
 
+    if args.backup_dir is not None:
+        plan = duplicate_removal_plan(groups, args.keep)
+        if args.json:
+            report["planned_backups"] = [str(path) for path in plan]
+        if args.output:
+            write_json_atomic(report, args.output)
+        if args.json:
+            print(json.dumps(report, indent=2))
+        else:
+            print_human_report(groups, scanned, skipped, summary_only=False)
+            print(f"\nBackup plan -> {args.backup_dir}")
+            for path in plan:
+                print(f"  MOVE {path}")
+            if not plan:
+                print("  Nothing to move.")
+            else:
+                moved, failed = backup_duplicates(groups, args.backup_dir, args.keep)
+                print(f"\nMoved {len(moved)} files to backup.")
+                if failed:
+                    print(f"Failed to move {len(failed)} files.")
+        return 1 if args.fail_if_duplicates and groups else 0
+
     if args.delete:
-        plan = duplicate_removal_plan(groups)
+        plan = duplicate_removal_plan(groups, args.keep)
         if args.json:
             report["planned_removals"] = [str(path) for path in plan]
         if args.output:
@@ -171,7 +199,7 @@ def main() -> int:
             elif not args.yes:
                 print("\nDry run only. Re-run with --delete --yes to remove these files.")
             else:
-                removed, failed = remove_duplicates(groups)
+                removed, failed = remove_duplicates(groups, args.keep)
                 print(f"\nRemoved {len(removed)} files.")
                 if failed:
                     print(f"Failed to remove {len(failed)} files.")
