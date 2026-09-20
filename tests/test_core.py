@@ -122,6 +122,42 @@ class DuplicateFinderTests(unittest.TestCase):
             third.write_bytes(b"1234")
             self.assertEqual(reclaimable_bytes([[first, second, third]]), 8)
 
+    def test_backup_requires_explicit_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup = root / "backup"
+            (root / "first.txt").write_text("same", encoding="utf-8")
+            (root / "second.txt").write_text("same", encoding="utf-8")
+            original = sys.argv
+            try:
+                sys.argv = ["dupes", str(root), "--backup-dir", str(backup)]
+                with redirect_stdout(StringIO()):
+                    with self.assertRaises(SystemExit):
+                        main()
+            finally:
+                sys.argv = original
+            self.assertTrue((root / "first.txt").exists())
+            self.assertTrue((root / "second.txt").exists())
+
+    def test_backup_moves_only_after_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup = root / "backup"
+            first = root / "first.txt"
+            second = root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            original = sys.argv
+            try:
+                sys.argv = ["dupes", str(root), "--backup-dir", str(backup), "--yes", "--keep", "path"]
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(main(), 0)
+            finally:
+                sys.argv = original
+            self.assertTrue(first.exists())
+            self.assertFalse(second.exists())
+            self.assertTrue((backup / "second.txt").exists())
+
     def test_fail_if_duplicates_returns_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
