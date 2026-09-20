@@ -12,6 +12,7 @@ Duplicate File Finder recursively scans directories, narrows candidates by file 
 - Minimum-size filtering
 - Optional hidden-file exclusion
 - Repeatable path exclusions
+- Configurable parallel hashing workers
 - Human-readable and JSON output
 - Summary-only mode
 - No files are deleted or modified
@@ -31,6 +32,8 @@ dupes /path/one /path/two
 dupes /path/to/directory --min-size 1048576
 dupes /path/to/directory --no-hidden
 dupes /path/to/directory --exclude /path/to/directory/cache
+
+dupes /path/to/directory --workers 4
 dupes /path/to/directory --json
 dupes /path/to/directory --summary-only
 dupes --version
