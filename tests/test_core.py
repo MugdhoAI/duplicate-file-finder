@@ -12,6 +12,7 @@ from duplicate_file_finder.core import (
     find_duplicates,
     partial_file_hash,
     reclaimable_bytes,
+    select_keep_file,
 )
 
 
@@ -88,6 +89,27 @@ class DuplicateFinderTests(unittest.TestCase):
             self.assertEqual(groups, [])
             self.assertEqual(scanned, 1)
             self.assertEqual(skipped, 0)
+
+    def test_max_size_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "small.txt").write_text("same", encoding="utf-8")
+            (root / "large.txt").write_text("same" * 100, encoding="utf-8")
+            groups, scanned, skipped = find_duplicates(root, max_size=10)
+            self.assertEqual(groups, [])
+            self.assertEqual(scanned, 1)
+            self.assertEqual(skipped, 0)
+
+    def test_keep_strategy_selects_expected_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            oldest = root / "old.txt"
+            newest = root / "new.txt"
+            oldest.write_text("same", encoding="utf-8")
+            newest.write_text("same", encoding="utf-8")
+            self.assertEqual(select_keep_file([newest, oldest], "path"), oldest)
+            self.assertEqual(select_keep_file([oldest, newest], "oldest"), oldest)
+            self.assertEqual(select_keep_file([oldest, newest], "newest"), newest)
 
     def test_reclaimable_bytes_keeps_one_file_per_group(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
