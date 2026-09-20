@@ -14,6 +14,7 @@ authors = [
 ]
 
 [project.scripts]
+dupes = "duplicate_file_finder.cli:main"
 duplicate-file-finder = "duplicate_file_finder.cli:main"
 
 [tool.setuptools.packages.find]
