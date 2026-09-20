@@ -17,6 +17,7 @@ def iter_files(
     root: Path,
     *,
     min_size: int = 0,
+    max_size: int | None = None,
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
     follow_symlinks: bool = False,
@@ -35,7 +36,7 @@ def iter_files(
                     part.startswith(".") for part in path.relative_to(root).parts
                 ):
                     continue
-                if path.is_file() and path.stat().st_size >= min_size:
+                if path.is_file() and min_size <= path.stat().st_size and (max_size is None or path.stat().st_size <= max_size):
                     yield path
             except OSError:
                 continue
@@ -81,6 +82,7 @@ def find_duplicates(
     root: Path | Iterable[Path],
     *,
     min_size: int = 0,
+    max_size: int | None = None,
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
     workers: int | None = None,
@@ -96,6 +98,7 @@ def find_duplicates(
         for path in iter_files(
             current_root,
             min_size=min_size,
+            max_size=max_size,
             include_hidden=include_hidden,
             exclude=exclude,
             follow_symlinks=follow_symlinks,
