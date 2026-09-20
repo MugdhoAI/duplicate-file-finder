@@ -144,8 +144,6 @@ def main() -> int:
         parser.error("--yes requires --delete")
     if args.backup_dir is not None and args.delete:
         parser.error("--backup-dir cannot be combined with --delete")
-    if args.backup_dir is not None and not args.yes:
-        parser.error("--backup-dir requires --yes")
 
     groups, scanned, skipped = find_duplicates(
         args.directories,
@@ -174,6 +172,8 @@ def main() -> int:
                 print(f"  MOVE {path}")
             if not plan:
                 print("  Nothing to move.")
+            elif not args.yes:
+                print("\nDry run only. Re-run with --backup-dir --yes to move these files.")
             else:
                 moved, failed = backup_duplicates(groups, args.backup_dir, args.keep)
                 print(f"\nMoved {len(moved)} files to backup.")
@@ -205,11 +205,11 @@ def main() -> int:
                     print(f"Failed to remove {len(failed)} files.")
         return 1 if args.fail_if_duplicates and groups else 0
 
+    if args.output:
+        write_json_atomic(report, args.output)
     if args.json:
         print(json.dumps(report, indent=2))
-    elif args.output:
-        write_json_atomic(report, args.output)
-    else:
+    elif args.output is None:
         print_human_report(groups, scanned, skipped, args.summary_only)
 
     return 1 if args.fail_if_duplicates and groups else 0
