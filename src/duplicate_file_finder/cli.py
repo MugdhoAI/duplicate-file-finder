@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-size", type=int, default=0, metavar="BYTES", help="ignore files smaller than BYTES")
     parser.add_argument("--exclude", action="append", type=Path, default=[], metavar="PATH", help="exclude PATH and its descendants; repeatable")
     parser.add_argument("--no-hidden", action="store_true", help="skip hidden files and directories")
+    parser.add_argument("--workers", type=int, metavar="N", help="number of hashing workers; default is automatic")
     parser.add_argument("--version", action="version", version=f"%(prog)s {package_version()}")
     return parser
 
@@ -89,12 +90,15 @@ def main() -> int:
             parser.error(f"not a directory: {root}")
     if args.min_size < 0:
         parser.error("--min-size must be >= 0")
+    if args.workers is not None and args.workers < 1:
+        parser.error("--workers must be >= 1")
 
     groups, scanned, skipped = find_duplicates(
         args.directories,
         min_size=args.min_size,
         include_hidden=not args.no_hidden,
         exclude=args.exclude,
+        workers=args.workers,
     )
 
     if args.json:
