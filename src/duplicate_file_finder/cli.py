@@ -7,7 +7,7 @@ import json
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from .core import find_duplicates, reclaimable_bytes
+from .core import duplicate_removal_plan, find_duplicates, reclaimable_bytes, remove_duplicates
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-hidden", action="store_true", help="skip hidden files and directories")
     parser.add_argument("--workers", type=int, metavar="N", help="number of hashing workers; default is automatic")
     parser.add_argument("--version", action="version", version=f"%(prog)s {package_version()}")
+    parser.add_argument("--delete", action="store_true", help="preview redundant files; requires --yes to actually delete")
+    parser.add_argument("--yes", action="store_true", help="confirm deletion when used with --delete")
     return parser
 
 
@@ -100,6 +102,31 @@ def main() -> int:
         exclude=args.exclude,
         workers=args.workers,
     )
+
+    if args.yes and not args.delete:
+        parser.error("--yes requires --delete")
+
+    if args.delete:
+        plan = duplicate_removal_plan(groups)
+        if args.json:
+            report = build_report(args.directories, groups, scanned, skipped)
+            report["planned_removals"] = [str(path) for path in plan]
+            print(json.dumps(report, indent=2))
+        else:
+            print_human_report(groups, scanned, skipped, summary_only=False)
+            print("\nCleanup plan (one file preserved per group):")
+            for path in plan:
+                print(f"  REMOVE {path}")
+            if not plan:
+                print("  Nothing to remove.")
+            elif not args.yes:
+                print("\nDry run only. Re-run with --delete --yes to remove these files.")
+            else:
+                removed, failed = remove_duplicates(groups)
+                print(f"\nRemoved {len(removed)} files.")
+                if failed:
+                    print(f"Failed to remove {len(failed)} files.")
+        return 0
 
     if args.json:
         print(json.dumps(build_report(args.directories, groups, scanned, skipped), indent=2))
