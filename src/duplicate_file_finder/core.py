@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterable
@@ -76,6 +78,7 @@ def find_duplicates(
     min_size: int = 0,
     include_hidden: bool = True,
     exclude: Iterable[Path] = (),
+    workers: int | None = None,
 ) -> tuple[list[list[Path]], int, int]:
     """Find exact duplicate files using staged hashing and safe file selection."""
     roots = _normalize_roots(root)
@@ -98,25 +101,32 @@ def find_duplicates(
             by_size[size].append(path)
             scanned += 1
 
+    def hash_candidates(paths: list[Path], hasher) -> list[tuple[Path, str]]:
+        max_workers = workers if workers is not None else min(32, (os.cpu_count() or 1) + 4)
+        if max_workers <= 1 or len(paths) == 1:
+            return [(path, hasher(path)) for path in paths]
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(zip(paths, executor.map(hasher, paths)))
+
     by_partial_hash: dict[tuple[int, str], list[Path]] = defaultdict(list)
     for size, paths in by_size.items():
         if len(paths) < 2:
             continue
-        for path in paths:
-            try:
-                by_partial_hash[(size, partial_file_hash(path))].append(path)
-            except OSError:
-                skipped += 1
+        try:
+            for path, digest in hash_candidates(paths, partial_file_hash):
+                by_partial_hash[(size, digest)].append(path)
+        except OSError:
+            skipped += 1
 
     by_hash: dict[str, list[Path]] = defaultdict(list)
     for paths in by_partial_hash.values():
         if len(paths) < 2:
             continue
-        for path in paths:
-            try:
-                by_hash[file_hash(path)].append(path)
-            except OSError:
-                skipped += 1
+        try:
+            for path, digest in hash_candidates(paths, file_hash):
+                by_hash[digest].append(path)
+        except OSError:
+            skipped += 1
 
     duplicates: list[list[Path]] = []
     for paths in by_hash.values():
