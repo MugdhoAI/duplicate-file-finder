@@ -1,8 +1,8 @@
 # Duplicate File Finder
 
-A small, dependency-free Python CLI for finding duplicate files by content.
+A small, dependency-free Python CLI for safely auditing and reclaiming wasted storage from exact duplicate files.
 
-Duplicate File Finder recursively scans directories, narrows candidates by file size and partial SHA-256 hashing, confirms matches with full SHA-256, and reports storage that could be reclaimed.
+Duplicate File Finder runs locally, scans files by content, and reports exactly what it found before any cleanup. It narrows candidates by file size and partial SHA-256 hashing, confirms matches with full SHA-256, and reports storage that could be reclaimed. **It does not upload your files or send file contents to a remote service.**
 
 ## Features
 
@@ -46,7 +46,7 @@ dupes /path/to/directory --fail-if-duplicates
 
 dupes /path/to/directory --delete
 dupes /path/to/directory --delete --yes
-dupes /path/to/directory --backup-dir ./duplicate-backup --keep oldest
+dupes /path/to/directory --backup-dir ./duplicate-backup --keep oldest --yes
 dupes /path/to/directory --summary-only
 dupes --version
 ```
