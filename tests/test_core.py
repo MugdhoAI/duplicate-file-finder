@@ -5,7 +5,9 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest import mock
 
+from duplicate_file_finder import core
 from duplicate_file_finder.cli import main
 from duplicate_file_finder.core import (
     file_hash,
@@ -74,6 +76,50 @@ class DuplicateFinderTests(unittest.TestCase):
             groups, _, skipped = find_duplicates(root)
             self.assertEqual(groups, [[first, second]])
             self.assertEqual(skipped, 0)
+
+    def test_unreadable_file_at_partial_hash_stage_keeps_other_duplicates(self) -> None:
+        # Regression test: one file failing its partial hash used to
+        # discard the whole same-size group, hiding real duplicates.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.txt"
+            second = root / "second.txt"
+            bad = root / "bad.txt"
+            for path in (first, second, bad):
+                path.write_text("duplicate", encoding="utf-8")
+            real_partial = core.partial_file_hash
+
+            def flaky_partial(path, **kwargs):
+                if path == bad:
+                    raise OSError("simulated unreadable file")
+                return real_partial(path, **kwargs)
+
+            with mock.patch.object(core, "partial_file_hash", side_effect=flaky_partial):
+                groups, scanned, skipped = find_duplicates(root)
+            self.assertEqual(groups, [[first, second]])
+            self.assertEqual(scanned, 3)
+            self.assertEqual(skipped, 1)
+
+    def test_unreadable_file_at_full_hash_stage_keeps_other_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.txt"
+            second = root / "second.txt"
+            bad = root / "bad.txt"
+            for path in (first, second, bad):
+                path.write_text("duplicate", encoding="utf-8")
+            real_full = core.file_hash
+
+            def flaky_full(path, **kwargs):
+                if path == bad:
+                    raise OSError("simulated unreadable file")
+                return real_full(path, **kwargs)
+
+            with mock.patch.object(core, "file_hash", side_effect=flaky_full):
+                groups, scanned, skipped = find_duplicates(root)
+            self.assertEqual(groups, [[first, second]])
+            self.assertEqual(scanned, 3)
+            self.assertEqual(skipped, 1)
 
     def test_symlinks_are_skipped_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

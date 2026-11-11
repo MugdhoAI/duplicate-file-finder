@@ -112,32 +112,46 @@ def find_duplicates(
             by_size[size].append(path)
             scanned += 1
 
-    def hash_candidates(paths: list[Path], hasher) -> list[tuple[Path, str]]:
+    def hash_candidates(paths: list[Path], hasher) -> tuple[list[tuple[Path, str]], int]:
+        """Hash every candidate, tolerating per-file failures.
+
+        A file that cannot be read (permissions, or deleted between the
+        scan and the hashing) must not discard the whole group: the
+        remaining files can still be duplicates of each other. Returns
+        the successful (path, digest) pairs and the failure count.
+        """
+        def safe_hash(path: Path) -> tuple[Path, str] | None:
+            try:
+                return path, hasher(path)
+            except OSError:
+                return None
+
         max_workers = workers if workers is not None else min(32, (os.cpu_count() or 1) + 4)
         if max_workers <= 1 or len(paths) == 1:
-            return [(path, hasher(path)) for path in paths]
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            return list(zip(paths, executor.map(hasher, paths)))
+            outcomes = [safe_hash(path) for path in paths]
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                outcomes = list(executor.map(safe_hash, paths))
+        results = [outcome for outcome in outcomes if outcome is not None]
+        return results, len(outcomes) - len(results)
 
     by_partial_hash: dict[tuple[int, str], list[Path]] = defaultdict(list)
     for size, paths in by_size.items():
         if len(paths) < 2:
             continue
-        try:
-            for path, digest in hash_candidates(paths, partial_file_hash):
-                by_partial_hash[(size, digest)].append(path)
-        except OSError:
-            skipped += 1
+        hashed, failures = hash_candidates(paths, partial_file_hash)
+        skipped += failures
+        for path, digest in hashed:
+            by_partial_hash[(size, digest)].append(path)
 
     by_hash: dict[str, list[Path]] = defaultdict(list)
     for paths in by_partial_hash.values():
         if len(paths) < 2:
             continue
-        try:
-            for path, digest in hash_candidates(paths, file_hash):
-                by_hash[digest].append(path)
-        except OSError:
-            skipped += 1
+        hashed, failures = hash_candidates(paths, file_hash)
+        skipped += failures
+        for path, digest in hashed:
+            by_hash[digest].append(path)
 
     duplicates: list[list[Path]] = []
     for paths in by_hash.values():
