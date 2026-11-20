@@ -159,8 +159,15 @@ def main() -> int:
 
     if args.backup_dir is not None:
         plan = duplicate_removal_plan(groups, args.keep)
+        moved: list[Path] = []
+        failed: list[Path] = []
+        if args.yes and plan:
+            moved, failed = backup_duplicates(groups, args.backup_dir, args.keep)
         if args.json:
             report["planned_backups"] = [str(path) for path in plan]
+            if args.yes:
+                report["moved_files"] = [str(path) for path in moved]
+                report["failed_moves"] = [str(path) for path in failed]
         if args.output:
             write_json_atomic(report, args.output)
         if args.json:
@@ -175,7 +182,6 @@ def main() -> int:
             elif not args.yes:
                 print("\nDry run only. Re-run with --backup-dir --yes to move these files.")
             else:
-                moved, failed = backup_duplicates(groups, args.backup_dir, args.keep)
                 print(f"\nMoved {len(moved)} files to backup.")
                 if failed:
                     print(f"Failed to move {len(failed)} files.")
@@ -183,8 +189,15 @@ def main() -> int:
 
     if args.delete:
         plan = duplicate_removal_plan(groups, args.keep)
+        removed: list[Path] = []
+        failed: list[Path] = []
+        if args.yes and plan:
+            removed, failed = remove_duplicates(groups, args.keep)
         if args.json:
             report["planned_removals"] = [str(path) for path in plan]
+            if args.yes:
+                report["removed_files"] = [str(path) for path in removed]
+                report["failed_removals"] = [str(path) for path in failed]
         if args.output:
             write_json_atomic(report, args.output)
         if args.json:
@@ -199,7 +212,6 @@ def main() -> int:
             elif not args.yes:
                 print("\nDry run only. Re-run with --delete --yes to remove these files.")
             else:
-                removed, failed = remove_duplicates(groups, args.keep)
                 print(f"\nRemoved {len(removed)} files.")
                 if failed:
                     print(f"Failed to remove {len(failed)} files.")
