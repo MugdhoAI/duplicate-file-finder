@@ -99,6 +99,68 @@ class CliTests(unittest.TestCase):
             self.assertTrue(first.exists())
             self.assertFalse(second.exists())
 
+    def test_json_delete_with_yes_removes_only_redundant_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--json", "--delete", "--yes"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["planned_removals"], [str(second)])
+            self.assertTrue(first.exists())
+            self.assertFalse(second.exists())
+
+    def test_json_delete_without_yes_is_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--json", "--delete"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["planned_removals"], [str(second)])
+            self.assertTrue(first.exists())
+            self.assertTrue(second.exists())
+
+    def test_json_backup_with_yes_moves_only_redundant_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "data"
+            root.mkdir()
+            backup_dir = Path(directory) / "backup"
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--json", "--backup-dir", str(backup_dir), "--yes"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["planned_backups"], [str(second)])
+            self.assertTrue(first.exists())
+            self.assertFalse(second.exists())
+            self.assertTrue((backup_dir / "second.txt").exists())
+
+    def test_json_backup_without_yes_is_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "data"
+            root.mkdir()
+            backup_dir = Path(directory) / "backup"
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--json", "--backup-dir", str(backup_dir)]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["planned_backups"], [str(second)])
+            self.assertTrue(first.exists())
+            self.assertTrue(second.exists())
+            self.assertFalse((backup_dir / "second.txt").exists())
+
     def test_yes_without_delete_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with patch("sys.argv", ["dupes", directory, "--yes"]):
