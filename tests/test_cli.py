@@ -71,6 +71,19 @@ class CliTests(unittest.TestCase):
             groups, _, _ = find_duplicates(root)
             self.assertEqual(groups, [])
 
+    def test_same_directory_twice_reports_each_file_once_in_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "first.txt").write_text("same", encoding="utf-8")
+            (root / "second.txt").write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), str(root), "--json"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["scanned"], 2)
+            self.assertEqual(report["duplicate_group_count"], 1)
+            self.assertEqual(report["reclaimable_bytes"], 4)
+
     def test_workers_flag_is_accepted(self) -> None:
         args = build_parser().parse_args([".", "--workers", "2"])
         self.assertEqual(args.workers, 2)

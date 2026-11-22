@@ -94,6 +94,7 @@ def find_duplicates(
     by_size: dict[int, list[Path]] = defaultdict(list)
     scanned = 0
     skipped = 0
+    seen: set[str] = set()
 
     for current_root in roots:
         for path in iter_files(
@@ -104,6 +105,18 @@ def find_duplicates(
             exclude=exclude,
             follow_symlinks=follow_symlinks,
         ):
+            # Overlapping roots (the same directory twice, a directory
+            # plus one of its subdirectories, or the same directory
+            # spelled differently) yield the same file more than once.
+            # Count and hash each distinct path only once, otherwise the
+            # scanned count is inflated and the file is hashed again for
+            # every extra occurrence. The key is the normalized absolute
+            # path without symlink resolution, so distinct symlink or
+            # hard link entries keep their existing scanned semantics.
+            key = os.path.normcase(os.path.abspath(path))
+            if key in seen:
+                continue
+            seen.add(key)
             try:
                 size = path.stat().st_size
             except OSError:

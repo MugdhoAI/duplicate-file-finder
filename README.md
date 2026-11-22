@@ -6,7 +6,7 @@ Duplicate File Finder runs locally, scans files by content, and reports exactly 
 
 ## Features
 
-- Recursive scanning across one or more directories
+- Recursive scanning across one or more directories, with overlapping directories deduplicated so each file is counted and hashed once
 - Staged duplicate detection: size → partial SHA-256 → full SHA-256
 - Hard link aware duplicate reporting
 - Minimum and maximum size filtering

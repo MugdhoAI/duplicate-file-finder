@@ -121,6 +121,49 @@ class DuplicateFinderTests(unittest.TestCase):
             self.assertEqual(scanned, 3)
             self.assertEqual(skipped, 1)
 
+    def test_same_root_twice_counts_each_file_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.txt"
+            second = root / "second.txt"
+            first.write_text("duplicate", encoding="utf-8")
+            second.write_text("duplicate", encoding="utf-8")
+            groups, scanned, skipped = find_duplicates([root, root])
+            self.assertEqual(groups, [[first, second]])
+            self.assertEqual(scanned, 2)
+            self.assertEqual(skipped, 0)
+
+    def test_overlapping_nested_roots_count_each_file_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            nested = root / "nested"
+            nested.mkdir()
+            first = root / "first.txt"
+            second = root / "second.txt"
+            third = nested / "third.txt"
+            for path in (first, second, third):
+                path.write_text("duplicate", encoding="utf-8")
+            groups, scanned, skipped = find_duplicates([root, nested])
+            # Groups are sorted by path string, so nested/third.txt
+            # sorts before second.txt.
+            self.assertEqual(groups, [[first, third, second]])
+            self.assertEqual(scanned, 3)
+            self.assertEqual(skipped, 0)
+
+    def test_same_root_spelled_differently_counts_each_file_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.txt"
+            second = root / "second.txt"
+            first.write_text("duplicate", encoding="utf-8")
+            second.write_text("duplicate", encoding="utf-8")
+            (root / "nested").mkdir()
+            respelled = root / "nested" / ".."
+            groups, scanned, skipped = find_duplicates([root, respelled])
+            self.assertEqual(groups, [[first, second]])
+            self.assertEqual(scanned, 2)
+            self.assertEqual(skipped, 0)
+
     def test_symlinks_are_skipped_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
