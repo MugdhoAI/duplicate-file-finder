@@ -7,11 +7,22 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from duplicate_file_finder.cli import build_parser, main, parse_size
+from duplicate_file_finder.cli import build_parser, format_size, main, parse_size
 from duplicate_file_finder.core import find_duplicates
 
 
 class CliTests(unittest.TestCase):
+    def test_format_size_units_and_boundaries(self) -> None:
+        self.assertEqual(format_size(0), "0.0 B")
+        self.assertEqual(format_size(512), "512.0 B")
+        self.assertEqual(format_size(1023), "1023.0 B")
+        self.assertEqual(format_size(1024), "1.0 KB")
+        self.assertEqual(format_size(1536), "1.5 KB")
+        self.assertEqual(format_size(1024 ** 2), "1.0 MB")
+        self.assertEqual(format_size(1024 ** 3), "1.0 GB")
+        self.assertEqual(format_size(1024 ** 4), "1.0 TB")
+        self.assertEqual(format_size(1024 ** 5), "1024.0 TB")
+
     def test_short_command_parser_uses_dupes(self) -> None:
         self.assertEqual(build_parser().prog, "dupes")
 
