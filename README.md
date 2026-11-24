@@ -35,6 +35,7 @@ python -m pip install -e .
 dupes /path/to/directory
 dupes /path/one /path/two
 dupes /path/to/directory --min-size 1048576
+dupes /path/to/directory --min-size 1MB
 dupes /path/to/directory --max-size 1073741824
 dupes /path/to/directory --no-hidden
 dupes /path/to/directory --exclude /path/to/directory/cache
@@ -46,6 +47,7 @@ dupes /path/to/directory --fail-if-duplicates
 
 dupes /path/to/directory --delete
 dupes /path/to/directory --delete --yes
+dupes /path/to/directory --delete --yes --keep oldest
 dupes /path/to/directory --backup-dir ./duplicate-backup --keep oldest --yes
 dupes /path/to/directory --summary-only
 dupes --version
@@ -55,7 +57,7 @@ The original `duplicate-file-finder` command remains available.
 
 Scanning is read only by default. Symlinked files are skipped unless `--follow-symlinks` is explicitly enabled. `--delete` shows the exact cleanup plan first; actual deletion requires explicit `--yes` confirmation. Before deleting each file, the tool rechecks its size and full hash against the file being preserved. Hard links to the same underlying inode are not counted as separate duplicate files, because they do not represent additional file data.
 
-Cleanup supports `path`, `oldest`, and `newest` keep strategies. `--backup-dir` moves redundant files into a backup directory after the same size/hash verification used by deletion, giving destructive cleanup a reversible alternative.
+Cleanup supports `path`, `oldest`, and `newest` keep strategies. `--backup-dir` moves redundant files into a backup directory after the same size/hash verification used by deletion, giving destructive cleanup a reversible alternative. `--min-size` and `--max-size` accept plain byte counts or a B, KB, MB, GB, or TB suffix, so `--min-size 1MB` means 1,048,576 bytes. When a confirmed cleanup cannot remove or move a file, the command exits with status 1 so scripts can detect the incomplete cleanup.
 
 JSON reports include a schema version, scan statistics, duplicate group hashes, and per-file SHA-256 values. `--output` writes the report atomically so an interrupted write does not leave a partial report. `--fail-if-duplicates` returns exit status 1 when duplicates are found, which makes the scanner usable in scripts and CI.
 
