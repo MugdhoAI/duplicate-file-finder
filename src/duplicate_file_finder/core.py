@@ -37,7 +37,10 @@ def iter_files(
                     part.startswith(".") for part in path.relative_to(root).parts
                 ):
                     continue
-                if path.is_file() and min_size <= path.stat().st_size and (max_size is None or path.stat().st_size <= max_size):
+                if not path.is_file():
+                    continue
+                size = path.stat().st_size
+                if min_size <= size and (max_size is None or size <= max_size):
                     yield path
             except OSError:
                 continue

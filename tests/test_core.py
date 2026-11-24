@@ -189,6 +189,19 @@ class DuplicateFinderTests(unittest.TestCase):
             self.assertEqual(scanned, 1)
             self.assertEqual(skipped, 0)
 
+    def test_size_filters_include_exact_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "exact.txt").write_text("12345", encoding="utf-8")
+            groups, scanned, skipped = find_duplicates(root, min_size=5, max_size=5)
+            self.assertEqual(scanned, 1)
+            self.assertEqual(skipped, 0)
+            self.assertEqual(groups, [])
+            _, scanned_below, _ = find_duplicates(root, min_size=6)
+            self.assertEqual(scanned_below, 0)
+            _, scanned_above, _ = find_duplicates(root, max_size=4)
+            self.assertEqual(scanned_above, 0)
+
     def test_keep_strategy_selects_expected_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
