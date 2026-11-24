@@ -127,6 +127,33 @@ class CliTests(unittest.TestCase):
             self.assertTrue(second.exists())
             self.assertIn("Dry run only", output.getvalue())
 
+    def test_summary_only_hides_listing_in_delete_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--delete", "--summary-only"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            self.assertIn("Scanned 2 files", output.getvalue())
+            self.assertNotIn("Group 1", output.getvalue())
+            self.assertNotIn("Duplicate files", output.getvalue())
+
+    def test_summary_only_hides_listing_in_backup_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup = root / "backup"
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--backup-dir", str(backup), "--summary-only"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            self.assertIn("Scanned 2 files", output.getvalue())
+            self.assertNotIn("Group 1", output.getvalue())
+            self.assertNotIn("Duplicate files", output.getvalue())
+
     def test_delete_with_yes_removes_only_redundant_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

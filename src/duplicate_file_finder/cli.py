@@ -189,7 +189,7 @@ def main() -> int:
         if args.json:
             print(json.dumps(report, indent=2))
         else:
-            print_human_report(groups, scanned, skipped, summary_only=False)
+            print_human_report(groups, scanned, skipped, summary_only=args.summary_only)
             print(f"\nBackup plan -> {args.backup_dir}")
             for path in plan:
                 print(f"  MOVE {path}")
@@ -219,7 +219,7 @@ def main() -> int:
         if args.json:
             print(json.dumps(report, indent=2))
         else:
-            print_human_report(groups, scanned, skipped, summary_only=False)
+            print_human_report(groups, scanned, skipped, summary_only=args.summary_only)
             print("\nCleanup plan (one file preserved per group):")
             for path in plan:
                 print(f"  REMOVE {path}")
