@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from duplicate_file_finder.cli import build_parser, format_size, main, parse_size
+from duplicate_file_finder.cli import build_parser, format_size, main, parse_size, write_json_atomic
 from duplicate_file_finder.core import find_duplicates
 
 
@@ -22,6 +22,18 @@ class CliTests(unittest.TestCase):
         self.assertEqual(format_size(1024 ** 3), "1.0 GB")
         self.assertEqual(format_size(1024 ** 4), "1.0 TB")
         self.assertEqual(format_size(1024 ** 5), "1024.0 TB")
+
+    def test_atomic_write_failure_leaves_no_partial_report(self) -> None:
+        import json
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "report.json"
+            with patch.object(json, "dump", side_effect=OSError("simulated write failure")):
+                with self.assertRaises(OSError):
+                    write_json_atomic({"report_version": 1}, output)
+            self.assertFalse(output.exists())
+            self.assertEqual(list(root.iterdir()), [])
 
     def test_short_command_parser_uses_dupes(self) -> None:
         self.assertEqual(build_parser().prog, "dupes")
