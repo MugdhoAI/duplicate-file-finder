@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import tempfile
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -13,6 +14,21 @@ from .core import backup_duplicates, duplicate_removal_plan, file_hash, find_dup
 
 
 REPORT_VERSION = 1
+
+
+SIZE_SUFFIXES = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3, "TB": 1024 ** 4}
+SIZE_PATTERN = re.compile(r"^(\d+(?:\.\d+)?)\s*([KMGT]?B)?$", re.IGNORECASE)
+
+
+def parse_size(value: str) -> int:
+    """Parse a byte count such as 2048, 512B, 1KB, or 1.5MB."""
+    match = SIZE_PATTERN.match(value.strip())
+    if match is None:
+        raise argparse.ArgumentTypeError(
+            f"invalid size: {value!r} (expected a number with an optional B, KB, MB, GB, or TB suffix)"
+        )
+    amount, suffix = match.groups()
+    return int(float(amount) * SIZE_SUFFIXES[(suffix or "B").upper()])
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, metavar="FILE", help="write the JSON report atomically to FILE")
     parser.add_argument("--summary-only", action="store_true", help="print only the scan summary")
     parser.add_argument("--fail-if-duplicates", action="store_true", help="exit with status 1 when duplicates are found")
-    parser.add_argument("--min-size", type=int, default=0, metavar="BYTES", help="ignore files smaller than BYTES")
-    parser.add_argument("--max-size", type=int, metavar="BYTES", help="ignore files larger than BYTES")
+    parser.add_argument("--min-size", type=parse_size, default=0, metavar="BYTES", help="ignore files smaller than BYTES (suffixes B, KB, MB, GB, TB allowed)")
+    parser.add_argument("--max-size", type=parse_size, metavar="BYTES", help="ignore files larger than BYTES (suffixes B, KB, MB, GB, TB allowed)")
     parser.add_argument("--exclude", action="append", type=Path, default=[], metavar="PATH", help="exclude PATH and its descendants; repeatable")
     parser.add_argument("--no-hidden", action="store_true", help="skip hidden files and directories")
     parser.add_argument("--follow-symlinks", action="store_true", help="include symlinked files in scans; disabled by default")

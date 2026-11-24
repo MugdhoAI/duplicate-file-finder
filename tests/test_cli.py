@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from duplicate_file_finder.cli import build_parser, main
+from duplicate_file_finder.cli import build_parser, main, parse_size
 from duplicate_file_finder.core import find_duplicates
 
 
@@ -87,6 +87,32 @@ class CliTests(unittest.TestCase):
     def test_workers_flag_is_accepted(self) -> None:
         args = build_parser().parse_args([".", "--workers", "2"])
         self.assertEqual(args.workers, 2)
+
+    def test_parse_size_accepts_plain_bytes_and_suffixes(self) -> None:
+        self.assertEqual(parse_size("2048"), 2048)
+        self.assertEqual(parse_size("512B"), 512)
+        self.assertEqual(parse_size("1KB"), 1024)
+        self.assertEqual(parse_size("1kb"), 1024)
+        self.assertEqual(parse_size("2 MB"), 2 * 1024 ** 2)
+        self.assertEqual(parse_size("1.5KB"), 1536)
+        self.assertEqual(parse_size("1GB"), 1024 ** 3)
+
+    def test_parse_size_rejects_unknown_suffixes(self) -> None:
+        import argparse
+
+        for value in ("10XB", "abc", "", "-5", "1.5.2KB"):
+            with self.assertRaises(argparse.ArgumentTypeError, msg=value):
+                parse_size(value)
+
+    def test_min_size_suffix_filters_through_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "first.txt").write_text("same", encoding="utf-8")
+            (root / "second.txt").write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--min-size", "1KB", "--summary-only"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            self.assertIn("Scanned 0 files", output.getvalue())
 
 
     def test_delete_is_dry_run_without_yes(self) -> None:
