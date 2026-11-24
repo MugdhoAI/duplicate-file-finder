@@ -138,6 +138,37 @@ class CliTests(unittest.TestCase):
             self.assertIn("Scanned 0 files", output.getvalue())
 
 
+    def test_delete_with_failed_removal_returns_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with (
+                patch("sys.argv", ["dupes", str(root), "--delete", "--yes"]),
+                patch("duplicate_file_finder.cli.remove_duplicates", return_value=([], [second])),
+                contextlib.redirect_stdout(output),
+            ):
+                self.assertEqual(main(), 1)
+            self.assertIn("Failed to remove 1 files", output.getvalue())
+
+    def test_backup_with_failed_move_returns_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup = root / "backup"
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("same", encoding="utf-8")
+            second.write_text("same", encoding="utf-8")
+            output = io.StringIO()
+            with (
+                patch("sys.argv", ["dupes", str(root), "--backup-dir", str(backup), "--yes"]),
+                patch("duplicate_file_finder.cli.backup_duplicates", return_value=([], [second])),
+                contextlib.redirect_stdout(output),
+            ):
+                self.assertEqual(main(), 1)
+            self.assertIn("Failed to move 1 files", output.getvalue())
+
     def test_delete_is_dry_run_without_yes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

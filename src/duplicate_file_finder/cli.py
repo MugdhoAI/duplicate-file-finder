@@ -201,7 +201,7 @@ def main() -> int:
                 print(f"\nMoved {len(moved)} files to backup.")
                 if failed:
                     print(f"Failed to move {len(failed)} files.")
-        return 1 if args.fail_if_duplicates and groups else 0
+        return 1 if (failed or (args.fail_if_duplicates and groups)) else 0
 
     if args.delete:
         plan = duplicate_removal_plan(groups, args.keep)
@@ -231,7 +231,7 @@ def main() -> int:
                 print(f"\nRemoved {len(removed)} files.")
                 if failed:
                     print(f"Failed to remove {len(failed)} files.")
-        return 1 if args.fail_if_duplicates and groups else 0
+        return 1 if (failed or (args.fail_if_duplicates and groups)) else 0
 
     if args.output:
         write_json_atomic(report, args.output)
