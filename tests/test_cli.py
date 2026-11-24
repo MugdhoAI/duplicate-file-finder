@@ -28,6 +28,18 @@ class CliTests(unittest.TestCase):
             self.assertEqual(report["scanned"], 2)
             self.assertEqual(report["reclaimable_bytes"], 4)
 
+    def test_summary_uses_plural_for_multiple_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a1.txt").write_text("alpha", encoding="utf-8")
+            (root / "a2.txt").write_text("alpha", encoding="utf-8")
+            (root / "b1.txt").write_text("beta", encoding="utf-8")
+            (root / "b2.txt").write_text("beta", encoding="utf-8")
+            output = io.StringIO()
+            with patch("sys.argv", ["dupes", str(root), "--summary-only"]), contextlib.redirect_stdout(output):
+                self.assertEqual(main(), 0)
+            self.assertIn("found 2 duplicate groups", output.getvalue())
+
     def test_summary_only_hides_file_listing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -48,7 +60,7 @@ class CliTests(unittest.TestCase):
             output = io.StringIO()
             with patch("sys.argv", ["dupes", first_dir, second_dir, "--min-size", "5", "--summary-only"]), contextlib.redirect_stdout(output):
                 self.assertEqual(main(), 0)
-            self.assertIn("found 1 duplicate groups", output.getvalue())
+            self.assertIn("found 1 duplicate group", output.getvalue())
 
     def test_no_hidden_skips_hidden_entries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

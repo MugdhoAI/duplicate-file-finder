@@ -131,7 +131,7 @@ def print_human_report(groups: list[list[Path]], scanned: int, skipped: int, sum
                 print()
         else:
             print("No duplicate files found.\n")
-    print(f"Scanned {scanned} files and found {len(groups)} duplicate groups.")
+    print(f"Scanned {scanned} files and found {len(groups)} duplicate group{'s' if len(groups) != 1 else ''}.")
     print(f"Potentially reclaimable space: {format_size(reclaimable_bytes(groups))}")
     if skipped:
         print(f"Skipped {skipped} files that could not be accessed.")
